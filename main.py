@@ -9,7 +9,7 @@ st.set_page_config(page_title="Multi LLM Chat", page_icon="💬", layout="center
 
 # Initialize session state
 if "api_key" not in st.session_state:
-    st.session_state.api_key = "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"
+    st.session_state.api_key = ""
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "selected_model" not in st.session_state:
