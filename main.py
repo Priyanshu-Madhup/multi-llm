@@ -16,14 +16,14 @@ if "messages" not in st.session_state:
 if "provider" not in st.session_state:
     st.session_state.provider = "Groq"
 if "selected_model_name_groq" not in st.session_state:
-    st.session_state.selected_model_name_groq = "LLaMA 3.3"
+    st.session_state.selected_model_name_groq = "LlaMA 3.3"
 if "selected_model_name_openrouter" not in st.session_state:
     st.session_state.selected_model_name_openrouter = "DeepSeek R1"
 
 # Model options per provider
 model_options = {
     "Groq": {
-        "LLaMA 3.3": "llama-3.3-70b-versatile",
+        "LlaMA 3.3": "llama-3.3-70b-versatile",
         "DeepSeek R1": "deepseek-r1-distill-llama-70b",
         "Llama 4 Mavrick" : "meta-llama/llama-4-maverick-17b-128e-instruct",
         "Llama 4 Scout" : "meta-llama/llama-4-scout-17b-16e-instruct",
