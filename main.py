@@ -16,7 +16,7 @@ if "messages" not in st.session_state:
 if "provider" not in st.session_state:
     st.session_state.provider = "Groq"
 if "selected_model_name_groq" not in st.session_state:
-    st.session_state.selected_model_name_groq = "LLaMA 3.3 70B"
+    st.session_state.selected_model_name_groq = "LLaMA 3.3"
 if "selected_model_name_openrouter" not in st.session_state:
     st.session_state.selected_model_name_openrouter = "DeepSeek R1"
 
