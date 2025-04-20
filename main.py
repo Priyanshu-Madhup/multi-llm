@@ -23,7 +23,7 @@ if "selected_model_name_openrouter" not in st.session_state:
 # Model options per provider
 model_options = {
     "Groq": {
-        "LLaMA 3.3 70B": "llama-3.3-70b-versatile",
+        "LLaMA 3.3": "llama-3.3-70b-versatile",
         "DeepSeek R1": "deepseek-r1-distill-llama-70b",
         "Llama 4 Mavrick" : "meta-llama/llama-4-maverick-17b-128e-instruct",
         "Llama 4 Scout" : "meta-llama/llama-4-scout-17b-16e-instruct",
