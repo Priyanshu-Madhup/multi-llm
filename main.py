@@ -55,9 +55,10 @@ model_logos = {
     "DeepSeek V3": "deepseeklogo.png",
     "Llama 4 Mavrick": "llamalogo.png",
     "Llama 4 Scout": "llamalogo.png",
-    "Llama 3.3": "llamalogo.png",
+    "Llama 3.3": "llamalogo.jpeg",
     "Gemini 2.5 pro": "gemini logo.png",
-    "Gemma 3": "gemmalogo.jpeg"
+    "Gemma 3": "gemmalogo.jpeg",
+    "Mistral Saba" : "mistrallogo.png"
 }
 
 # Sidebar settings
