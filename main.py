@@ -14,7 +14,7 @@ if "api_key" not in st.session_state:
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "provider" not in st.session_state:
-    st.session_state.provider = "Groq"
+    st.session_state.provider = "OpenRouter"
 if "selected_model_name_groq" not in st.session_state:
     st.session_state.selected_model_name_groq = "Llama 3.3"
 if "selected_model_name_openrouter" not in st.session_state:
