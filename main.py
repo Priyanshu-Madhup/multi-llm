@@ -137,7 +137,7 @@ prompt = st.chat_input("Type your message here...")
 
 # Optional image uploader (only for image-capable models)
 uploaded_image = None
-if st.session_state.selected_model in image_capable_models:
+if st.session_state.selected_model in image_capable_models and st.session_state.provider == "OpenRouter":
     with st.sidebar:
         st.header("Attach Image")
         uploaded_image = st.file_uploader("Attach Image", type=["png", "jpg", "jpeg"], key="image_upload_unique")
