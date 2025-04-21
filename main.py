@@ -14,11 +14,11 @@ if "api_key" not in st.session_state:
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "provider" not in st.session_state:
-    st.session_state.provider = "OpenRouter"
+    st.session_state.provider = "Groq"
 if "selected_model_name_groq" not in st.session_state:
     st.session_state.selected_model_name_groq = "Llama 3.3"
 if "selected_model_name_openrouter" not in st.session_state:
-    st.session_state.selected_model_name_openrouter = "DeepSeek R1"
+    st.session_state.selected_model_name_openrouter = "Llama 3.3"
 
 # Model options per provider
 model_options = {
