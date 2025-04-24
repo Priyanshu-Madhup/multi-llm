@@ -7,6 +7,9 @@ import json
 import http.client
 from io import BytesIO
 from datetime import datetime
+from google import genai
+from google.genai import types
+from PIL import Image
 
 # Streamlit page config
 st.set_page_config(page_title="LLM Chat (Groq + OpenRouter + Serper)", page_icon="💬", layout="centered")
@@ -16,6 +19,8 @@ if "api_key" not in st.session_state:
     st.session_state.api_key = ""
 if "serper_api_key" not in st.session_state:
     st.session_state.serper_api_key = ""
+if "gemini_api_key" not in st.session_state:
+    st.session_state.gemini_api_key = ""
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "provider" not in st.session_state:
@@ -28,6 +33,8 @@ if "enable_serper" not in st.session_state:
     st.session_state.enable_serper = False
 if "search_method" not in st.session_state:
     st.session_state.search_method = "POST"
+if "enable_image_generation" not in st.session_state:
+    st.session_state.enable_image_generation = False  # Enable by default
 
 # Model options per provider
 model_options = {
@@ -173,6 +180,36 @@ def format_search_results(results):
     
     return formatted_results
 
+# Function to generate images using Gemini
+def generate_image_with_gemini(prompt):
+    try:
+        # Initialize client with the API key from session state
+        client = genai.Client(api_key=st.session_state.gemini_api_key)
+        
+        # Generate image content
+        response = client.models.generate_content(
+            model="gemini-2.0-flash-exp-image-generation",
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_modalities=['TEXT', 'IMAGE']
+            )
+        )
+        
+        # Process response
+        generated_image = None
+        generation_text = ""
+        
+        for part in response.candidates[0].content.parts:
+            if part.text is not None:
+                generation_text += part.text
+            elif part.inline_data is not None:
+                generated_image = BytesIO(part.inline_data.data)
+        
+        return generated_image, generation_text
+    
+    except Exception as e:
+        return None, f"Error generating image: {str(e)}"
+
 # Sidebar settings
 with st.sidebar:
     st.header("Settings")
@@ -235,6 +272,26 @@ with st.sidebar:
             st.success("Serper API Key is set")
         else:
             st.error("Serper API Key not set")
+      # Image Generation toggle
+    st.header("Image Generation")
+    st.session_state.enable_image_generation = st.toggle("Enable Gemini Image Generation", st.session_state.enable_image_generation)
+    
+    # Gemini API key input
+    if st.session_state.enable_image_generation:
+        gemini_api_key = st.text_input("Gemini API Key", type="password", value=st.session_state.gemini_api_key)
+        if st.button("Save Gemini API Key"):
+            if gemini_api_key:
+                st.session_state.gemini_api_key = gemini_api_key
+                st.success("Gemini API Key saved!")
+                st.rerun()
+            else:
+                st.error("Please enter a valid Gemini API key.")
+                
+        # Show Gemini API key status
+        if st.session_state.gemini_api_key:
+            st.success("Gemini API Key is set")
+        else:
+            st.error("Gemini API Key not set")
 
     # Show main API key status
     if st.session_state.api_key:
@@ -271,6 +328,8 @@ except Exception as e:
 features_text = "Powered by " + st.session_state.selected_model_name + " via " + st.session_state.provider
 if st.session_state.enable_serper:
     features_text += f" with Real-time Web Search ({st.session_state.search_method})"
+if st.session_state.enable_image_generation:
+    features_text += f" and Gemini Image Generation"
 st.write(features_text)
 
 # Display chat description based on model capabilities
@@ -279,6 +338,40 @@ if is_image_capable:
     st.caption("This model supports image understanding. You can add images to your messages.")
 else:
     st.caption("This model is text-only. Image attachments will be ignored.")
+
+# Image generation section (if enabled)
+if st.session_state.enable_image_generation:
+    st.header("Generate Images with Gemini")
+    with st.expander("Image Generation", expanded=False):
+        image_prompt = st.text_area("Image Description", 
+                                   "A 3D rendered image of a pig with wings and a top hat flying over a happy futuristic sci-fi city with lots of greenery",
+                                   help="Describe the image you want to generate")
+        
+        if st.button("Generate Image"):
+            with st.spinner("Generating image..."):
+                generated_image, generation_text = generate_image_with_gemini(image_prompt)
+                
+                if generated_image:
+                    # Save image to a temporary file
+                    temp_img_path = "temp_gemini_image.png"
+                    try:
+                        image = Image.open(generated_image)
+                        image.save(temp_img_path)
+                        st.image(temp_img_path, caption="Generated by Gemini")
+                        
+                        if generation_text:
+                            st.text(generation_text)
+                            
+                        # Option to add to chat
+                        if st.button("Add to Chat"):
+                            # Add the generated image to the chat as a user message
+                            user_message = {"role": "user", "content": f"I generated this image with prompt: {image_prompt}", "image": temp_img_path}
+                            st.session_state.messages.append(user_message)
+                            st.rerun()
+                    except Exception as e:
+                        st.error(f"Error processing the generated image: {str(e)}")
+                else:
+                    st.error(generation_text)  # Display error message
 
 # Display previous messages
 for message in st.session_state.messages:
