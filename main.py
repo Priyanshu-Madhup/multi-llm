@@ -3,14 +3,19 @@ from groq import Groq
 from openai import OpenAI
 import base64
 import os
+import json
+import http.client
 from io import BytesIO
+from datetime import datetime
 
 # Streamlit page config
-st.set_page_config(page_title="LLM Chat (Groq + OpenRouter)", page_icon="💬", layout="centered")
+st.set_page_config(page_title="LLM Chat (Groq + OpenRouter + Serper)", page_icon="💬", layout="centered")
 
 # Session state initialization
 if "api_key" not in st.session_state:
     st.session_state.api_key = ""
+if "serper_api_key" not in st.session_state:
+    st.session_state.serper_api_key = ""
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "provider" not in st.session_state:
@@ -19,6 +24,10 @@ if "selected_model_name_groq" not in st.session_state:
     st.session_state.selected_model_name_groq = "Llama 3.3"
 if "selected_model_name_openrouter" not in st.session_state:
     st.session_state.selected_model_name_openrouter = "Llama 3.3"
+if "enable_serper" not in st.session_state:
+    st.session_state.enable_serper = False
+if "search_method" not in st.session_state:
+    st.session_state.search_method = "POST"
 
 # Model options per provider
 model_options = {
@@ -46,20 +55,123 @@ image_capable_models = [
     "meta-llama/llama-4-maverick:free",
     "meta-llama/llama-4-scout:free",
     #"google/gemini-2.5-pro-exp-03-25:free",
-    "google/gemma-3-27b-it:free"
+    "google/gemma-3-27b-it:free",
     "mistral-saba-24b"
 ]
 
 model_logos = {
     "DeepSeek R1": "deepseeklogo.png",
     "DeepSeek V3": "deepseeklogo.png",
-    "Llama 4 Mavrick": "llamalogo.png",
-    "Llama 4 Scout": "llamalogo.png",
+    "Llama 4 Mavrick": "llamalogo.jpeg",
+    "Llama 4 Scout": "llamalogo.jpeg",
     "Llama 3.3": "llamalogo.jpeg",
     "Gemini 2.5 pro": "gemini logo.png",
     "Gemma 3": "gemmalogo.jpeg",
     "Mistral Saba" : "mistrallogo.png"
 }
+
+# Function to search using Serper.dev with http.client (POST method)
+def search_with_serper_post(query):
+    if not st.session_state.serper_api_key:
+        return {"error": "Serper API key is not set"}
+    
+    try:
+        conn = http.client.HTTPSConnection("google.serper.dev")
+        
+        payload = json.dumps({
+            "q": query,
+            "gl": "us",
+            "hl": "en",
+            "autocorrect": True
+        })
+        
+        headers = {
+            'X-API-KEY': st.session_state.serper_api_key,
+            'Content-Type': 'application/json'
+        }
+        
+        conn.request("POST", "/search", payload, headers)
+        res = conn.getresponse()
+        data = res.read()
+        
+        return json.loads(data.decode("utf-8"))
+    except Exception as e:
+        return {"error": str(e)}
+
+# Function to search using Serper.dev with http.client (GET method)
+def search_with_serper_get(query):
+    if not st.session_state.serper_api_key:
+        return {"error": "Serper API key is not set"}
+    
+    try:
+        conn = http.client.HTTPSConnection("google.serper.dev")
+        
+        # Format query for URL
+        encoded_query = query.replace(' ', '+')
+        endpoint = f"/search?q={encoded_query}&apiKey={st.session_state.serper_api_key}"
+        
+        conn.request("GET", endpoint)
+        res = conn.getresponse()
+        data = res.read()
+        
+        return json.loads(data.decode("utf-8"))
+    except Exception as e:
+        return {"error": str(e)}
+
+# Function to format search results for the LLM
+def format_search_results(results):
+    if "error" in results:
+        return f"Error searching: {results['error']}"
+    
+    formatted_results = f"Search results as of {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}:\n\n"
+    
+    # Organic search results
+    if "organic" in results:
+        formatted_results += "Web Results:\n"
+        for i, result in enumerate(results["organic"][:5], 1):
+            formatted_results += f"{i}. {result.get('title', 'No title')}\n"
+            formatted_results += f"   URL: {result.get('link', 'No link')}\n"
+            if "snippet" in result:
+                formatted_results += f"   Snippet: {result['snippet']}\n"
+            formatted_results += "\n"
+    
+    # Knowledge Graph if available
+    if "knowledgeGraph" in results:
+        kg = results["knowledgeGraph"]
+        formatted_results += "Knowledge Graph:\n"
+        formatted_results += f"Title: {kg.get('title', 'N/A')}\n"
+        if "description" in kg:
+            formatted_results += f"Description: {kg['description']}\n"
+        if "attributes" in kg:
+            formatted_results += "Attributes:\n"
+            for key, value in kg["attributes"].items():
+                formatted_results += f"- {key}: {value}\n"
+        formatted_results += "\n"
+    
+    # News results if available
+    if "news" in results and results["news"]:
+        formatted_results += "Recent News:\n"
+        for i, news in enumerate(results["news"][:3], 1):
+            formatted_results += f"{i}. {news.get('title', 'No title')}\n"
+            formatted_results += f"   Source: {news.get('source', 'Unknown')}\n"
+            formatted_results += f"   Published: {news.get('date', 'No date')}\n"
+            formatted_results += f"   URL: {news.get('link', 'No link')}\n\n"
+    
+    # Answer boxes if available
+    if "answerBox" in results:
+        answer = results["answerBox"]
+        formatted_results += "Featured Answer:\n"
+        if "answer" in answer:
+            formatted_results += f"Answer: {answer['answer']}\n"
+        elif "snippet" in answer:
+            formatted_results += f"Snippet: {answer['snippet']}\n"
+        if "title" in answer:
+            formatted_results += f"Source: {answer.get('title')}\n"
+        if "link" in answer:
+            formatted_results += f"URL: {answer.get('link')}\n"
+        formatted_results += "\n"
+    
+    return formatted_results
 
 # Sidebar settings
 with st.sidebar:
@@ -93,6 +205,38 @@ with st.sidebar:
         else:
             st.error("Please enter a valid API key.")
 
+    # Web Search toggle first
+    st.header("Web Search Integration")
+    st.session_state.enable_serper = st.toggle("Enable Real-time Web Search", st.session_state.enable_serper)
+    
+    # Only show Serper settings if web search is enabled
+    if st.session_state.enable_serper:
+        # Serper.dev API key
+        serper_api_key = st.text_input("Serper API Key", type="password", value=st.session_state.serper_api_key)
+        if st.button("Save Serper API Key"):
+            if serper_api_key:
+                st.session_state.serper_api_key = serper_api_key
+                st.success("Serper API Key saved!")
+                st.rerun()
+            else:
+                st.error("Please enter a valid Serper API key.")
+        
+        # Search method selection - only shown if search is enabled
+        st.session_state.search_method = st.radio(
+            "API Request Method",
+            options=["POST", "GET"],
+            index=0 if st.session_state.search_method == "POST" else 1
+        )
+        
+        st.caption("POST provides more control over search parameters. GET is simpler but more limited.")
+        
+        # Show Serper API key status
+        if st.session_state.serper_api_key:
+            st.success("Serper API Key is set")
+        else:
+            st.error("Serper API Key not set")
+
+    # Show main API key status
     if st.session_state.api_key:
         st.success("API Key is set")
     else:
@@ -124,44 +268,96 @@ except Exception as e:
     st.error(f"Error loading logo: {str(e)}")
     st.title("Multi LLM Chat")
 
-st.write(f"Powered by {st.session_state.selected_model_name} via {st.session_state.provider}")
+features_text = "Powered by " + st.session_state.selected_model_name + " via " + st.session_state.provider
+if st.session_state.enable_serper:
+    features_text += f" with Real-time Web Search ({st.session_state.search_method})"
+st.write(features_text)
+
+# Display chat description based on model capabilities
+is_image_capable = st.session_state.selected_model in image_capable_models
+if is_image_capable:
+    st.caption("This model supports image understanding. You can add images to your messages.")
+else:
+    st.caption("This model is text-only. Image attachments will be ignored.")
 
 # Display previous messages
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         if message.get("image"):
-            st.image(message["image"], width=200)
+            st.image(message["image"], width=300)
         st.markdown(message["content"])
 
-# Input prompt
-prompt = st.chat_input("Type your message here...")
-
-# Optional image uploader (only for image-capable models)
-uploaded_image = None
-if st.session_state.selected_model in image_capable_models and st.session_state.provider == "OpenRouter":
-    with st.sidebar:
-        st.header("Attach Image")
-        uploaded_image = st.file_uploader("Attach Image", type=["png", "jpg", "jpeg"], key="image_upload_unique")
+# Conditional chat input based on model capabilities
+if is_image_capable:
+    # Image-capable model: Use chat_input with file upload capability
+    prompt_input = st.chat_input(
+        "Type your message and/or attach an image",
+        accept_file=True,
+        file_type=["jpg", "jpeg", "png"],
+    )
+else:
+    # Text-only model: Use simple chat_input
+    prompt_input = st.chat_input("Type your message")
 
 # Process input
-if prompt or (uploaded_image and st.button("Send")):
-    user_message = {"role": "user", "content": prompt or "What is in this image?"}
-    image_data_url = None
-
-    if uploaded_image:
-        image_bytes = uploaded_image.read()
+if prompt_input:
+    image_data = None
+    
+    # For image-capable models with file input
+    if is_image_capable and hasattr(prompt_input, "files") and prompt_input.files:
+        uploaded_file = prompt_input.files[0]
+        image_bytes = uploaded_file.read()
+        
+        # Create a BytesIO object for display
+        image_for_display = BytesIO(image_bytes)
+        
+        # Create a base64 encoded string for API
         image_base64 = base64.b64encode(image_bytes).decode('utf-8')
-        image_mime = "image/png" if uploaded_image.type == "image/png" else "image/jpeg"
+        image_mime = "image/png" if uploaded_file.type == "image/png" else "image/jpeg"
         image_data_url = f"data:{image_mime};base64,{image_base64}"
-        user_message["image"] = BytesIO(image_bytes)
-
+        
+        # Store both for different purposes
+        image_data = {
+            "display": image_for_display,
+            "data_url": image_data_url
+        }
+        
+        # Default message if only image is uploaded
+        message_text = prompt_input.text if prompt_input.text else "What is in this image?"
+    else:
+        # For text-only input
+        message_text = prompt_input if isinstance(prompt_input, str) else prompt_input.text
+    
+    # Add to message history
+    user_message = {"role": "user", "content": message_text}
+    if image_data:
+        user_message["image"] = image_data["display"]
+    
     st.session_state.messages.append(user_message)
-
+    
+    # Display the user message
     with st.chat_message("user"):
-        if image_data_url:
-            st.image(user_message["image"], width=200)
-        st.markdown(user_message["content"])
+        if image_data:
+            st.image(image_data["display"], width=300)
+        st.markdown(message_text)
 
+    # Search with Serper if enabled
+    search_results = None
+    if st.session_state.enable_serper and st.session_state.serper_api_key and message_text:
+        with st.spinner(f"Searching for real-time information using {st.session_state.search_method} method..."):
+            if st.session_state.search_method == "POST":
+                search_results = search_with_serper_post(message_text)
+            else:
+                search_results = search_with_serper_get(message_text)
+            
+            formatted_search = format_search_results(search_results)
+            
+            # Display search status
+            if "error" in search_results:
+                st.error(f"Search error: {search_results['error']}")
+            else:
+                st.success("Search completed successfully")
+    
     try:
         if st.session_state.provider == "Groq":
             client = Groq(api_key=st.session_state.api_key)
@@ -171,17 +367,39 @@ if prompt or (uploaded_image and st.button("Send")):
                 api_key=st.session_state.api_key,
             )
 
-        system_msg = {"role": "system", "content": "You are a helpful assistant."}
+        # Create system message with search instructions if enabled
+        system_content = "You are a helpful assistant."
+        if st.session_state.enable_serper:
+            system_content += " You have access to real-time web search results. When providing information based on search results, cite the source. If the search results don't contain relevant information for a query, rely on your knowledge but acknowledge its limitations and time constraints."
+        
+        system_msg = {"role": "system", "content": system_content}
         api_messages = [system_msg]
 
+        # Add conversation history
         for msg in st.session_state.messages:
-            content_block = [{"type": "text", "text": msg["content"]}]
-            if msg.get("image") and st.session_state.selected_model in image_capable_models:
-                content_block.append({
-                    "type": "image_url",
-                    "image_url": {"url": image_data_url}
-                })
-            api_messages.append({"role": msg["role"], "content": content_block if image_data_url else msg["content"]})
+            if msg.get("image") and is_image_capable:
+                # For messages with images, we need to construct a content array
+                if msg is user_message and image_data:
+                    # For the current message, use the freshly prepared image data
+                    content_array = [
+                        {"type": "text", "text": msg["content"]},
+                        {"type": "image_url", "image_url": {"url": image_data["data_url"]}}
+                    ]
+                    api_messages.append({"role": msg["role"], "content": content_array})
+                else:
+                    # Skip old messages with images if we don't have the data anymore
+                    # This is a limitation as we're not storing the base64 data in the session
+                    api_messages.append({"role": msg["role"], "content": msg["content"]})
+            else:
+                # For text-only messages
+                api_messages.append({"role": msg["role"], "content": msg["content"]})
+        
+        # Add search results if available
+        if search_results and formatted_search and "error" not in search_results:
+            api_messages.append({
+                "role": "system", 
+                "content": f"Here are real-time search results for the query: '{message_text}'\n\n{formatted_search}\n\nPlease use this information to help answer the user's question, citing sources when appropriate."
+            })
 
         if st.session_state.provider == "Groq":
             chat_completion = client.chat.completions.create(
